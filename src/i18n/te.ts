@@ -3,6 +3,13 @@ const te: Record<string, string> = {
   // Navigation
   Home: 'హోమ్',
   Transactions: 'లావాదేవీలు',
+  Entries: 'నమోదులు',
+  Stats: 'గణాంకాలు',
+  Expenses: 'ఖర్చులు',
+  Week: 'వారం',
+  Month: 'నెల',
+  Year: 'సంవత్సరం',
+  Period: 'కాలవ్యవధి',
   Budgets: 'బడ్జెట్‌లు',
   Savings: 'పొదుపు',
   Loans: 'అప్పులు',

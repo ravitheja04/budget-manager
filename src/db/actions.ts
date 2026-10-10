@@ -4,10 +4,11 @@ import { addMonths, nextOccurrenceAfter, occurrence, type Frequency } from '@/li
 import type { Holding, Loan, LoanPayment, Policy, Recurring, Txn } from '@/lib/types';
 import { loanPayments, listLoans } from './queries';
 import { getById, notifyChange, remove, save } from './repo';
+import { nextPaymentWithinTerm } from '@/lib/terms';
 import { CATEGORY_IDS } from './seed';
 import { newId } from './util';
 
-type NewTxn = Omit<Txn, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type NewTxn = Omit<Txn, 'id' | 'createdAt' | 'updatedAt' | 'bookDate'> & { id?: string; bookDate?: string | null };
 
 export async function saveTransaction(db: SQLiteDatabase, txn: NewTxn) {
   return save(db, 'transactions', { ...txn });
@@ -187,9 +188,11 @@ export async function deleteLoan(db: SQLiteDatabase, loan: Loan) {
 
 const PREMIUM_MONTHS = { monthly: 1, quarterly: 3, halfyearly: 6, yearly: 12 } as const;
 
-export function nextPremiumDate(p: Pick<Policy, 'frequency' | 'nextDue'>) {
+/** The premium after this one, or null once the premium paying term is over. */
+export function nextPremiumDate(p: Pick<Policy, 'frequency' | 'nextDue' | 'startDate' | 'payYears'>) {
   if (!p.nextDue || p.frequency === 'single') return null;
-  return addMonths(p.nextDue, PREMIUM_MONTHS[p.frequency]);
+  const months = PREMIUM_MONTHS[p.frequency];
+  return nextPaymentWithinTerm(p.nextDue, p.startDate, p.frequency, p.payYears, (d) => addMonths(d, months));
 }
 
 /** Logs the premium as an expense and moves the policy to its next due date. */
@@ -258,9 +261,11 @@ export async function payContribution(db: SQLiteDatabase, h: Holding, opts: { da
   notifyChange();
 }
 
-export function nextContributionDate(h: Pick<Holding, 'nextContributionDate' | 'contributionFrequency'>) {
+/** The deposit after this one, or null once the deposit term (SSY: 15 years) is over. */
+export function nextContributionDate(h: Pick<Holding, 'nextContributionDate' | 'contributionFrequency' | 'startDate' | 'payYears'>) {
   if (!h.nextContributionDate || !h.contributionFrequency) return null;
-  return occurrence(h.nextContributionDate, h.contributionFrequency, 1);
+  const f = h.contributionFrequency;
+  return nextPaymentWithinTerm(h.nextContributionDate, h.startDate, f, h.payYears, (d) => occurrence(d, f, 1));
 }
 
 export async function skipContribution(db: SQLiteDatabase, h: Holding) {

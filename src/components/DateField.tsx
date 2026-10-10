@@ -63,7 +63,7 @@ export function DateField({ label, value, onChange, hint, pickYearFirst, allowFu
           keyboardType="number-pad"
           maxLength={10}
           accessibilityLabel={t('{label}, day month year', { label })}
-          style={[styles.input, { flex: 1 }, looksFinished && { borderColor: colors.danger }]}
+          style={[styles.input, { flex: 1, minWidth: 0 }, looksFinished && { borderColor: colors.danger }]}
         />
         <Pressable
           accessibilityRole="button"

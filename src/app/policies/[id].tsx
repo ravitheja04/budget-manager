@@ -6,6 +6,7 @@ import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { DateField } from '@/components/DateField';
 import { AmountField, confirmDelete, Divider, RecordPicker } from '@/components/forms';
 import { TxnRow } from '@/components/rows';
+import { TermProgress } from '@/components/TermProgress';
 import { Button, Card, colors, Icon, InfoRow, SectionTitle, styles } from '@/components/ui';
 import { deletePolicy, payPremium, skipPremium } from '@/db/actions';
 import { attachmentsFor, listAccounts, listMembers, listTransactions, policyMemberIds } from '@/db/queries';
@@ -16,6 +17,7 @@ import { addDays, daysBetween } from '@/lib/dates';
 import { formatDate, isValidDate, todayIso } from '@/lib/format';
 import { frequencyLabel, policyKindLabel } from '@/lib/labels';
 import { formatMoney } from '@/lib/money';
+import { scheduleProgress } from '@/lib/terms';
 import type { Policy, PolicyDetails } from '@/lib/types';
 import { showError, useQuery } from '@/lib/useQuery';
 
@@ -113,6 +115,17 @@ export default function PolicyDetail() {
             {p.kind === 'health' && details.tpaPhone ? <CallButton label={details.tpa || t('TPA')} phone={details.tpaPhone} /> : null}
           </View>
         </Card>
+
+        {p.startDate ? (
+          <TermProgress
+            p={scheduleProgress({ start: p.startDate, frequency: p.frequency, next: p.nextDue, payYears: p.payYears, amount: p.premium, end: p.endDate }, today)}
+            paidLabel={t('Premiums')}
+            endLabel={p.kind === 'life' ? t('Matures') : t('Cover ends')}
+            end={p.endDate}
+          />
+        ) : (
+          <Text style={styles.hint}>{t('Add the start date and premium paying term (Edit policy) to see premiums paid and left.')}</Text>
+        )}
 
         {p.active && p.nextDue ? (
           <Card>

@@ -129,6 +129,8 @@ export async function restoreBackup(db: SQLiteDatabase, text: string, password: 
       }
       await tx.runAsync('INSERT OR REPLACE INTO deleted (tableName, id, deletedAt) VALUES (?, ?, ?)', d.tableName, d.id, d.deletedAt);
     }
+    // Backups from before card billing cycles have no bookDate: those entries count on their own date.
+    await tx.runAsync('UPDATE transactions SET bookDate = date WHERE bookDate IS NULL');
   });
   notifyChange();
   return counts;

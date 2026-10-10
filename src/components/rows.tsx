@@ -6,7 +6,7 @@ import { payRecurring, skipRecurring } from '@/db/actions';
 import { getById } from '@/db/repo';
 import type { TxnRow as TxnRowData } from '@/db/queries';
 import { t } from '@/i18n';
-import { daysBetween } from '@/lib/dates';
+import { daysBetween, monthTitle } from '@/lib/dates';
 import type { DueItem } from '@/lib/dues';
 import { formatDate, todayIso } from '@/lib/format';
 import { relativeDue } from '@/lib/labels';
@@ -25,7 +25,9 @@ export function TxnRow({ txn, showDate }: { txn: TxnRowData; showDate?: boolean 
       ? [txn.accountName ?? t('Outside'), txn.toAccountName ?? t('Outside')].join(' → ')
       : t(txn.notes)
     : [txn.payee ? t(txn.categoryName ?? '') : null, txn.accountName].filter(Boolean).join(' · ');
-  const sub = [showDate ? formatDate(txn.date) : null, accountText, txn.memberName].filter(Boolean).join(' · ');
+  // Card spends counted in the month their bill is paid.
+  const countsIn = txn.bookDate && txn.bookDate.slice(0, 7) !== txn.date.slice(0, 7) ? t('counts in {month}', { month: monthTitle(txn.bookDate) }) : null;
+  const sub = [showDate ? formatDate(txn.date) : null, accountText, txn.memberName, countsIn].filter(Boolean).join(' · ');
   return (
     <ListRow
       onPress={() => router.push({ pathname: '/txn/edit', params: { id: txn.id } })}

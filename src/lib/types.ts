@@ -13,6 +13,10 @@ export type Account = {
   /** Credit cards only. */
   cardLimit: number | null;
   dueDay: number | null;
+  /** Credit cards: the day the statement is made. */
+  statementDay: number | null;
+  /** Credit cards: 1 = spends count in the month their bill is paid. */
+  billMonth: number;
   archived: number;
   createdAt: string;
   updatedAt: string;
@@ -29,6 +33,8 @@ export type Txn = {
   kind: TxnKind;
   amount: number;
   date: string;
+  /** The date it counts on in budgets and Stats; the 1st of the bill month for cards set up that way, else the same as date. */
+  bookDate: string | null;
   accountId: string | null;
   toAccountId: string | null;
   categoryId: string | null;
@@ -101,6 +107,8 @@ export type Holding = {
   contribution: number | null;
   contributionFrequency: Frequency | null;
   nextContributionDate: string | null;
+  /** Years deposits are made for (SSY 15, PPF 15); maturity can be later. */
+  payYears: number | null;
   accountId: string | null;
   notes: string;
   closed: number;
@@ -183,6 +191,8 @@ export type Policy = {
   startDate: string | null;
   /** When the cover ends (term) or the policy matures (life). */
   endDate: string | null;
+  /** Premium paying term in years; cover can run longer. */
+  payYears: number | null;
   agentName: string;
   agentPhone: string;
   helpline: string;

@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { monthRange } from '@/lib/dates';
+import { cardCycle, type CardTxn } from '@/lib/cards';
 import { collectDues, type DueItem } from '@/lib/dues';
 import { holdingValue } from '@/lib/holdings';
 import { loanStatus, type LoanStatus } from '@/lib/loans';
@@ -29,6 +30,8 @@ export type TxnFilter = {
   to?: string;
   kind?: Txn['kind'] | null;
   categoryId?: string | null;
+  /** Only entries with no category. */
+  uncategorised?: boolean;
   accountId?: string | null;
   memberId?: string | null;
   search?: string;
@@ -44,10 +47,12 @@ export async function listTransactions(db: SQLiteDatabase, f: TxnFilter = {}) {
     where.push(clause);
     args.push(...values);
   };
-  if (f.from) add('t.date >= ?', f.from);
-  if (f.to) add('t.date <= ?', f.to);
+  // Periods go by the date an entry counts on (the bill month for some cards).
+  if (f.from) add('COALESCE(t.bookDate, t.date) >= ?', f.from);
+  if (f.to) add('COALESCE(t.bookDate, t.date) <= ?', f.to);
   if (f.kind) add('t.kind = ?', f.kind);
   if (f.categoryId) add('t.categoryId = ?', f.categoryId);
+  if (f.uncategorised) add('t.categoryId IS NULL');
   if (f.accountId) add('(t.accountId = ? OR t.toAccountId = ?)', f.accountId, f.accountId);
   if (f.memberId) add('t.memberId = ?', f.memberId);
   if (f.sourceType) add('t.sourceType = ?', f.sourceType);
@@ -102,7 +107,7 @@ export async function monthTotals(db: SQLiteDatabase, date: string) {
   const row = await db.getFirstAsync<{ income: number | null; expense: number | null }>(
     `SELECT SUM(CASE WHEN kind = 'income' THEN amount END) AS income,
             SUM(CASE WHEN kind = 'expense' THEN amount END) AS expense
-     FROM transactions WHERE date BETWEEN ? AND ?`,
+     FROM transactions WHERE COALESCE(bookDate, date) BETWEEN ? AND ?`,
     start,
     end
   );
@@ -113,7 +118,7 @@ export async function monthTotals(db: SQLiteDatabase, date: string) {
 export async function monthSpendByCategory(db: SQLiteDatabase, date: string) {
   const { start, end } = monthRange(date);
   const rows = await db.getAllAsync<{ categoryId: string | null; total: number }>(
-    `SELECT categoryId, SUM(amount) AS total FROM transactions WHERE kind = 'expense' AND date BETWEEN ? AND ? GROUP BY categoryId`,
+    `SELECT categoryId, SUM(amount) AS total FROM transactions WHERE kind = 'expense' AND COALESCE(bookDate, date) BETWEEN ? AND ? GROUP BY categoryId`,
     start,
     end
   );
@@ -202,7 +207,14 @@ export async function loadDues(db: SQLiteDatabase, today: string, horizonDays: n
       loans: loans.map(({ loan, status }) => ({ loan, nextEmiDate: status.nextEmiDate, nextEmiAmount: status.nextEmi?.amount ?? null, outstanding: status.outstanding })),
       policies,
       holdings,
-      cards: accounts.filter((a) => a.kind === 'card').map((a) => ({ account: a, outstanding: -a.balance })),
+      cards: await Promise.all(
+        accounts
+          .filter((a) => a.kind === 'card')
+          .map(async (a) => {
+            const cycle = await cardCycleFor(db, a, today);
+            return { account: a, outstanding: -a.balance, billed: cycle?.billed, billedDue: cycle?.billedDue };
+          })
+      ),
     },
     today,
     horizonDays
@@ -228,4 +240,42 @@ export async function lastUsedAccountId(db: SQLiteDatabase) {
   if (row) return row.accountId;
   const first = await db.getFirstAsync<{ id: string }>("SELECT id FROM accounts WHERE archived = 0 ORDER BY CASE kind WHEN 'cash' THEN 0 ELSE 1 END LIMIT 1");
   return first?.id ?? null;
+}
+
+export type CategoryTotal = { categoryId: string | null; name: string | null; icon: string | null; color: string | null; total: number; count: number };
+
+/** Income or spending per category between two dates, largest first. */
+export async function categoryTotals(db: SQLiteDatabase, kind: 'income' | 'expense', from: string, to: string) {
+  return db.getAllAsync<CategoryTotal>(
+    `SELECT t.categoryId, c.name, c.icon, c.color, SUM(t.amount) AS total, COUNT(*) AS count
+     FROM transactions t LEFT JOIN categories c ON c.id = t.categoryId
+     WHERE t.kind = ? AND COALESCE(t.bookDate, t.date) BETWEEN ? AND ?
+     GROUP BY t.categoryId ORDER BY total DESC`,
+    kind,
+    from,
+    to
+  );
+}
+
+/** Money moved out of the accounts to savings or loan principal (transfers to no tracked account), which isn't counted as spending. */
+export async function movedOut(db: SQLiteDatabase, from: string, to: string) {
+  const row = await db.getFirstAsync<{ total: number | null }>(
+    `SELECT SUM(amount) AS total FROM transactions
+     WHERE kind = 'transfer' AND accountId IS NOT NULL AND toAccountId IS NULL
+       AND (sourceType IS NULL OR sourceType != 'adjustment') AND date BETWEEN ? AND ?`,
+    from,
+    to
+  );
+  return row?.total ?? 0;
+}
+
+export async function firstEntryDate(db: SQLiteDatabase) {
+  return (await db.getFirstAsync<{ d: string | null }>('SELECT MIN(date) AS d FROM transactions'))?.d ?? null;
+}
+
+/** Billed and unbilled amounts for a card with a statement and due day; null for other accounts. */
+export async function cardCycleFor(db: SQLiteDatabase, account: Account, today: string) {
+  if (account.kind !== 'card' || !account.statementDay || !account.dueDay) return null;
+  const txns = await db.getAllAsync<CardTxn>('SELECT kind, amount, date, accountId, toAccountId FROM transactions WHERE accountId = ? OR toAccountId = ?', account.id, account.id);
+  return cardCycle(account.id, account.openingBalance, txns, account.statementDay, account.dueDay, today);
 }

@@ -90,8 +90,8 @@ export async function applyImport(db: SQLiteDatabase, plan: ImportPlan): Promise
     );
     const cardId = plan.cardBillAccount ? (accountIds.get(lower(plan.cardBillAccount)) ?? null) : null;
     const statement = await db.prepareAsync(
-      `INSERT OR IGNORE INTO transactions (id, kind, amount, date, accountId, toAccountId, categoryId, memberId, payee, notes, sourceType, sourceId, createdAt, updatedAt)
-       VALUES ($id, $kind, $amount, $date, $accountId, $toAccountId, $categoryId, NULL, $payee, $notes, NULL, NULL, $createdAt, $updatedAt)`
+      `INSERT OR IGNORE INTO transactions (id, kind, amount, date, bookDate, accountId, toAccountId, categoryId, memberId, payee, notes, sourceType, sourceId, createdAt, updatedAt)
+       VALUES ($id, $kind, $amount, $date, $date, $accountId, $toAccountId, $categoryId, NULL, $payee, $notes, NULL, NULL, $createdAt, $updatedAt)`
     );
     try {
       for (const r of plan.records) {

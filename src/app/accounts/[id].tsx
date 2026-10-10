@@ -7,9 +7,10 @@ import { AmountField, Divider, Stat } from '@/components/forms';
 import { TxnRow } from '@/components/rows';
 import { Button, Card, colors, EmptyState, SectionTitle, styles } from '@/components/ui';
 import { reconcile } from '@/db/actions';
-import { listAccounts, listTransactions } from '@/db/queries';
+import { cardCycleFor, listAccounts, listTransactions } from '@/db/queries';
+import { bookDateFor } from '@/lib/cards';
 import { t } from '@/i18n';
-import { nextDayOfMonth } from '@/lib/dates';
+import { monthTitle, nextDayOfMonth } from '@/lib/dates';
 import { formatDate, todayIso } from '@/lib/format';
 import { accountKindLabel } from '@/lib/labels';
 import { formatMoney } from '@/lib/money';
@@ -24,13 +25,14 @@ export default function AccountDetail() {
   const load = useCallback(async () => {
     const account = (await listAccounts(db, true)).find((a) => a.id === id);
     if (!account) return null;
-    const txns = await listTransactions(db, { accountId: id, limit: 100 });
-    return { account, txns };
+    const [txns, cycle] = await Promise.all([listTransactions(db, { accountId: id, limit: 100 }), cardCycleFor(db, account, todayIso())]);
+    return { account, txns, cycle };
   }, [db, id]);
   const { data, refresh } = useQuery(load);
   if (data === undefined) return <View style={styles.screen} />;
   if (data === null) return <View style={styles.screen}><Stack.Screen options={{ title: t('Not found') }} /></View>;
-  const { account: a, txns } = data;
+  const { account: a, txns, cycle } = data;
+  const today = todayIso();
   const isCard = a.kind === 'card';
   const outstanding = Math.max(0, -a.balance);
   // A card's balance is shown as what is owed (positive); others as money held.
@@ -59,18 +61,43 @@ export default function AccountDetail() {
             <View style={[styles.row, { marginTop: 12 }]}>
               <Stat label={t('Limit')} value={a.cardLimit ? formatMoney(a.cardLimit) : '—'} />
               <Stat label={t('Available')} value={a.cardLimit ? formatMoney(Math.max(0, a.cardLimit - outstanding)) : '—'} />
-              <Stat label={t('Due')} value={a.dueDay ? formatDate(nextDayOfMonth(a.dueDay, todayIso())) : '—'} align="right" />
+              {cycle ? null : <Stat label={t('Due')} value={a.dueDay ? formatDate(nextDayOfMonth(a.dueDay, today)) : '—'} align="right" />}
             </View>
           ) : null}
         </Card>
 
-        {isCard && outstanding > 0 ? (
+        {cycle ? (
+          <Card style={{ gap: 12 }}>
+            <View style={[styles.row, { alignItems: 'flex-start' }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hint}>{t('Billed on {date}', { date: formatDate(cycle.lastStatement) })}</Text>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: cycle.billed > 0 && cycle.billedDue < today ? colors.danger : colors.text }}>{formatMoney(cycle.billed)}</Text>
+                <Text style={[styles.hint, cycle.billed > 0 && cycle.billedDue < today ? { color: colors.danger } : null]}>
+                  {cycle.billed <= 0 ? t('Paid. Nothing due now.') : cycle.billedDue < today ? t('Was due {date}', { date: formatDate(cycle.billedDue) }) : t('Pay by {date}', { date: formatDate(cycle.billedDue) })}
+                </Text>
+              </View>
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={styles.hint}>{t('Unbilled')}</Text>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>{formatMoney(cycle.unbilled)}</Text>
+                <Text style={[styles.hint, { textAlign: 'right' }]}>{t('On the {date} bill', { date: formatDate(cycle.nextStatement) })}</Text>
+              </View>
+            </View>
+            {a.billMonth ? (
+              <Text style={styles.hint}>
+                {t('Spends count in the month their bill is paid: a spend today counts in {month}.', { month: monthTitle(bookDateFor(today, a)) })}
+              </Text>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {isCard && (cycle ? cycle.billed > 0 : outstanding > 0) ? (
           <Button
-            title={t('Pay the card bill')}
+            title={cycle ? t('Pay the bill ({amount})', { amount: formatMoney(cycle.billed) }) : t('Pay the card bill')}
             icon="card"
-            onPress={() => router.push({ pathname: '/txn/edit', params: { kind: 'transfer', toAccountId: a.id, amount: String(outstanding), payee: t('Card bill') } })}
+            onPress={() => router.push({ pathname: '/txn/edit', params: { kind: 'transfer', toAccountId: a.id, amount: String(cycle ? cycle.billed : outstanding), payee: t('Card bill') } })}
           />
         ) : null}
+        {isCard && !cycle ? <Text style={styles.hint}>{t('Add the statement day in Edit account to see what is billed and what comes on the next bill.')}</Text> : null}
 
         {reconciling ? (
           <Card style={{ gap: 10 }}>

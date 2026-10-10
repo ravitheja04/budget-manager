@@ -28,7 +28,8 @@ export type DuesInput = {
   loans: { loan: Loan; nextEmiDate: string | null; nextEmiAmount: number | null; outstanding: number }[];
   policies: Policy[];
   holdings: Holding[];
-  cards: { account: Account; outstanding: number }[];
+  /** billed/billedDue come from the card's billing cycle when it has a statement day. */
+  cards: { account: Account; outstanding: number; billed?: number; billedDue?: string }[];
 };
 
 /** Maturities and policy expiries are shown this far ahead even on the 7-day dashboard. */
@@ -106,8 +107,15 @@ export function collectDues(input: DuesInput, today: string, horizonDays: number
     }
   }
 
-  for (const { account, outstanding } of input.cards) {
-    if (account.archived || !account.dueDay || outstanding <= 0) continue;
+  for (const { account, outstanding, billed, billedDue } of input.cards) {
+    if (account.archived || !account.dueDay) continue;
+    if (billedDue !== undefined && billed !== undefined) {
+      // Only the last statement's amount is due; later spends wait for the next bill.
+      if (billed <= 0) continue;
+      push({ key: `card:${account.id}:${billedDue}`, kind: 'card', ownerId: account.id, title: account.name, date: billedDue, amount: billed, remindDays: [3, 0] });
+      continue;
+    }
+    if (outstanding <= 0) continue;
     const date = nextDayOfMonth(account.dueDay, today);
     push({ key: `card:${account.id}:${date}`, kind: 'card', ownerId: account.id, title: account.name, date, amount: outstanding, remindDays: [3, 0] });
   }

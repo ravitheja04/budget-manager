@@ -5,6 +5,7 @@ import { Alert, ScrollView, Text, View } from 'react-native';
 
 import { AmountField, confirmDelete, Divider, RecordPicker } from '@/components/forms';
 import { TxnRow } from '@/components/rows';
+import { TermProgress } from '@/components/TermProgress';
 import { Button, Card, colors, InfoRow, SectionTitle, styles } from '@/components/ui';
 import { payContribution, skipContribution } from '@/db/actions';
 import { listAccounts, listTransactions } from '@/db/queries';
@@ -14,6 +15,7 @@ import { formatDate, todayIso } from '@/lib/format';
 import { HOLDING_LABELS, holdingValue, maturityValue } from '@/lib/holdings';
 import { frequencyLabel } from '@/lib/labels';
 import { formatMoney } from '@/lib/money';
+import { scheduleProgress } from '@/lib/terms';
 import type { Holding, Member } from '@/lib/types';
 import { showError, useQuery } from '@/lib/useQuery';
 
@@ -100,6 +102,16 @@ export default function HoldingDetail() {
             )
           ) : null}
         </Card>
+
+        {h.contribution && h.startDate && h.contributionFrequency ? (
+          <TermProgress
+            p={scheduleProgress({ start: h.startDate, frequency: h.contributionFrequency, next: h.nextContributionDate, payYears: h.payYears, amount: h.contribution, end: h.maturityDate }, today)}
+            paidLabel={t('Deposits')}
+            paidAmount={h.invested}
+            endLabel={t('Matures')}
+            end={h.maturityDate}
+          />
+        ) : null}
 
         {h.contribution && h.nextContributionDate && !h.closed ? (
           <Card>

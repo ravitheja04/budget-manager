@@ -5,13 +5,21 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { CategoryIcon, ListRow, Stat } from '@/components/forms';
 import { Button, Card, colors, EmptyState, SectionTitle, styles } from '@/components/ui';
-import { listMembers, listPolicies } from '@/db/queries';
+import { listMembers, listPolicies, type PolicyRow } from '@/db/queries';
 import { t } from '@/i18n';
 import { perYear } from '@/lib/dates';
-import { formatDate } from '@/lib/format';
+import { formatDate, todayIso } from '@/lib/format';
 import { POLICY_ICONS, POLICY_KINDS, policyKindLabel } from '@/lib/labels';
 import { formatMoney, formatMoneyShort } from '@/lib/money';
+import { scheduleProgress } from '@/lib/terms';
 import { useQuery } from '@/lib/useQuery';
+
+/** "7 of 10 yrs paid" for policies with a premium paying term. */
+function termLine(p: { startDate: string | null; frequency: PolicyRow['frequency']; nextDue: string | null; payYears: number | null; premium: number; endDate: string | null }) {
+  if (!p.startDate || !p.payYears || p.frequency === 'single') return null;
+  const pr = scheduleProgress({ start: p.startDate, frequency: p.frequency, next: p.nextDue, payYears: p.payYears, amount: p.premium, end: p.endDate }, todayIso());
+  return pr.finished ? t('premiums done') : t('{paid} of {total} yrs paid', { paid: pr.yearsPaid, total: p.payYears });
+}
 
 export default function Insurance() {
   const db = useSQLiteContext();
@@ -79,7 +87,7 @@ export default function Insurance() {
                     onPress={() => router.push({ pathname: '/policies/[id]', params: { id: p.id } })}
                     left={<CategoryIcon icon={POLICY_ICONS[p.kind]} color={colors.primary} size={36} />}
                     title={p.planName ? `${p.insurer} · ${p.planName}` : p.insurer}
-                    subtitle={[p.insuredNames ?? p.holderName, p.nextDue ? t('due {date}', { date: formatDate(p.nextDue) }) : null].filter(Boolean).join(' · ')}
+                    subtitle={[p.insuredNames ?? p.holderName, termLine(p), p.nextDue ? t('due {date}', { date: formatDate(p.nextDue) }) : null].filter(Boolean).join(' · ')}
                     right={p.sumAssured ? formatMoneyShort(p.sumAssured) : undefined}
                     rightSub={p.premium ? formatMoney(p.premium) : null}
                   />

@@ -198,6 +198,20 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (tableName, id)
   );
   `,
+  // 2: credit-card billing cycles. bookDate is the date an entry counts on in
+  // budgets and Stats (the bill month for cards set up that way).
+  `
+  ALTER TABLE accounts ADD COLUMN statementDay INTEGER;
+  ALTER TABLE accounts ADD COLUMN billMonth INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE transactions ADD COLUMN bookDate TEXT;
+  UPDATE transactions SET bookDate = date WHERE bookDate IS NULL;
+  CREATE INDEX IF NOT EXISTS transactions_book_date ON transactions (bookDate);
+  `,
+  // 3: how many years premiums / deposits are paid for (the cover or maturity can run longer).
+  `
+  ALTER TABLE policies ADD COLUMN payYears INTEGER;
+  ALTER TABLE holdings ADD COLUMN payYears INTEGER;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase) {

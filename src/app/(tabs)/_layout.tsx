@@ -13,9 +13,10 @@ function SettingsButton() {
   );
 }
 
-const TABS: { name: string; title: () => string; icon: string }[] = [
+const TABS: { name: string; title: () => string; label?: () => string; icon: string }[] = [
   { name: 'index', title: () => t('Home'), icon: 'home' },
-  { name: 'transactions', title: () => t('Transactions'), icon: 'list' },
+  { name: 'transactions', title: () => t('Transactions'), label: () => t('Entries'), icon: 'list' },
+  { name: 'stats', title: () => t('Stats'), icon: 'stats-chart' },
   { name: 'budgets', title: () => t('Budgets'), icon: 'pie-chart' },
   { name: 'savings', title: () => t('Savings'), icon: 'trending-up' },
   { name: 'loans', title: () => t('Loans'), icon: 'cash' },
@@ -42,6 +43,7 @@ export default function TabsLayout() {
           name={tab.name}
           options={{
             title: tab.title(),
+            tabBarLabel: tab.label?.() ?? tab.title(),
             tabBarIcon: ({ color, focused }) => <Icon name={focused ? tab.icon : `${tab.icon}-outline`} color={color as string} size={22} />,
           }}
         />

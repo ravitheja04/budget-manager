@@ -191,3 +191,26 @@ test('backup bytes round-trip through UTF-8 and base64', async () => {
     assert.deepEqual(fromBase64(toBase64(bytes)), bytes);
   }
 });
+
+test('stats periods: weeks start on Monday, financial years in April', async () => {
+  const { periodFor, periodLabel, shiftPeriod, topWithOther } = await import('../period');
+  assert.deepEqual(periodFor('week', '2026-10-10'), { mode: 'week', from: '2026-10-05', to: '2026-10-11' }); // Sat -> Mon..Sun
+  assert.deepEqual(periodFor('week', '2026-10-05').from, '2026-10-05');
+  assert.deepEqual(periodFor('month', '2026-02-14'), { mode: 'month', from: '2026-02-01', to: '2026-02-28' });
+  assert.deepEqual(periodFor('fy', '2026-03-31'), { mode: 'fy', from: '2025-04-01', to: '2026-03-31' });
+  assert.deepEqual(periodFor('fy', '2026-04-01'), { mode: 'fy', from: '2026-04-01', to: '2027-03-31' });
+  assert.deepEqual(shiftPeriod(periodFor('month', '2026-01-31'), -1), { mode: 'month', from: '2025-12-01', to: '2025-12-31' });
+  assert.deepEqual(shiftPeriod(periodFor('year', '2026-06-01'), 1).from, '2027-01-01');
+  assert.deepEqual(shiftPeriod({ mode: 'custom', from: '2026-10-01', to: '2026-10-10' }, 1), { mode: 'custom', from: '2026-10-11', to: '2026-10-20' });
+  assert.equal(periodLabel(periodFor('month', '2026-10-10')), 'October 2026');
+  assert.equal(periodLabel(periodFor('fy', '2026-10-10')), 'FY 2026-27');
+  assert.equal(periodLabel(periodFor('week', '2026-10-10')), '5 Oct – 11 Oct 2026');
+  assert.equal(periodLabel({ mode: 'custom', from: '2016-10-01', to: '2026-10-31' }), '1 Oct 2016 – 31 Oct 2026');
+
+  const entries = [9, 8, 7, 6, 5, 4, 3, 2, 0].map((v, i) => ({ key: `c${i}`, value: v, item: i }));
+  const slices = topWithOther(entries, 6);
+  assert.deepEqual(slices.map((s) => s.key), ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'other']);
+  assert.equal(slices[6].value, 5);
+  // Seven slices fit without folding one into "Other".
+  assert.equal(topWithOther(entries.slice(0, 7), 6).length, 7);
+});

@@ -29,6 +29,8 @@ export type TxnFilter = {
   to?: string;
   kind?: Txn['kind'] | null;
   categoryId?: string | null;
+  /** Only entries with no category. */
+  uncategorised?: boolean;
   accountId?: string | null;
   memberId?: string | null;
   search?: string;
@@ -48,6 +50,7 @@ export async function listTransactions(db: SQLiteDatabase, f: TxnFilter = {}) {
   if (f.to) add('t.date <= ?', f.to);
   if (f.kind) add('t.kind = ?', f.kind);
   if (f.categoryId) add('t.categoryId = ?', f.categoryId);
+  if (f.uncategorised) add('t.categoryId IS NULL');
   if (f.accountId) add('(t.accountId = ? OR t.toAccountId = ?)', f.accountId, f.accountId);
   if (f.memberId) add('t.memberId = ?', f.memberId);
   if (f.sourceType) add('t.sourceType = ?', f.sourceType);
@@ -228,4 +231,35 @@ export async function lastUsedAccountId(db: SQLiteDatabase) {
   if (row) return row.accountId;
   const first = await db.getFirstAsync<{ id: string }>("SELECT id FROM accounts WHERE archived = 0 ORDER BY CASE kind WHEN 'cash' THEN 0 ELSE 1 END LIMIT 1");
   return first?.id ?? null;
+}
+
+export type CategoryTotal = { categoryId: string | null; name: string | null; icon: string | null; color: string | null; total: number; count: number };
+
+/** Income or spending per category between two dates, largest first. */
+export async function categoryTotals(db: SQLiteDatabase, kind: 'income' | 'expense', from: string, to: string) {
+  return db.getAllAsync<CategoryTotal>(
+    `SELECT t.categoryId, c.name, c.icon, c.color, SUM(t.amount) AS total, COUNT(*) AS count
+     FROM transactions t LEFT JOIN categories c ON c.id = t.categoryId
+     WHERE t.kind = ? AND t.date BETWEEN ? AND ?
+     GROUP BY t.categoryId ORDER BY total DESC`,
+    kind,
+    from,
+    to
+  );
+}
+
+/** Money moved out of the accounts to savings or loan principal (transfers to no tracked account), which isn't counted as spending. */
+export async function movedOut(db: SQLiteDatabase, from: string, to: string) {
+  const row = await db.getFirstAsync<{ total: number | null }>(
+    `SELECT SUM(amount) AS total FROM transactions
+     WHERE kind = 'transfer' AND accountId IS NOT NULL AND toAccountId IS NULL
+       AND (sourceType IS NULL OR sourceType != 'adjustment') AND date BETWEEN ? AND ?`,
+    from,
+    to
+  );
+  return row?.total ?? 0;
+}
+
+export async function firstEntryDate(db: SQLiteDatabase) {
+  return (await db.getFirstAsync<{ d: string | null }>('SELECT MIN(date) AS d FROM transactions'))?.d ?? null;
 }

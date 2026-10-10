@@ -8,10 +8,12 @@ import { AmountField, CategoryGrid, confirmDelete, RecordPicker, Segmented } fro
 import { Button, colors, Field, Icon, styles } from '@/components/ui';
 import { deleteTransaction, saveTransaction } from '@/db/actions';
 import { attachmentsFor, lastUsedAccountId, listAccounts, listCategories, listMembers, monthSpendByCategory, type AccountWithBalance } from '@/db/queries';
-import { getById } from '@/db/repo';
+import { bookDateOf, getById } from '@/db/repo';
 import { t } from '@/i18n';
 import { addAttachment, deleteAttachment, openAttachment, pickAttachment } from '@/lib/attachments';
 import { checkBudgetAlerts } from '@/lib/budgetAlerts';
+import { bookDateFor } from '@/lib/cards';
+import { monthTitle } from '@/lib/dates';
 import { isValidDate, todayIso } from '@/lib/format';
 import { accountKindLabel, txnKindLabel } from '@/lib/labels';
 import type { Attachment, Category, Member, Txn, TxnKind } from '@/lib/types';
@@ -70,15 +72,24 @@ export default function EditTransaction() {
         }
         await reloadAttachments();
       } else if (!params.accountId) {
-        setAccountId(await lastUsedAccountId(db));
+        // Paying into an account (a card bill) comes from another one: never the same account, and not a card.
+        const last = await lastUsedAccountId(db);
+        const lastAccount = accs.find((a) => a.id === last);
+        const usable = (a: AccountWithBalance | undefined) => !!a && !a.archived && a.id !== params.toAccountId && (!params.toAccountId || a.kind !== 'card');
+        setAccountId(usable(lastAccount) ? last : (accs.find(usable)?.id ?? null));
       }
       setLoaded(true);
     })().catch((e) => showError(t('Could not load data'), e));
-  }, [db, params.id, params.accountId, reloadAttachments]);
+  }, [db, params.id, params.accountId, params.toAccountId, reloadAttachments]);
 
   const visibleAccounts = accounts.filter((a) => !a.archived || a.id === accountId || a.id === toAccountId);
   const kindCategories = categories.filter((c) => c.kind === kind);
   const appLogged = !!original?.sourceType && original.sourceType !== 'recurring';
+  // Card spends that count in the month their bill is paid.
+  const payingAccount = accounts.find((a) => a.id === accountId);
+  const unmoved = !!original && original.date === date && original.accountId === accountId && !!original.bookDate;
+  const shownBookDate = unmoved ? original!.bookDate : date && isValidDate(date) && payingAccount?.kind === 'card' ? bookDateFor(date, payingAccount) : null;
+  const billMonthHint = shownBookDate && shownBookDate.slice(0, 7) !== date!.slice(0, 7) ? t('Counts in {month}, when this card’s bill is paid.', { month: monthTitle(shownBookDate) }) : null;
 
   function changeKind(next: TxnKind) {
     setKind(next);
@@ -96,8 +107,11 @@ export default function EditTransaction() {
     }
     setSaving(true);
     try {
-      const before = kind === 'expense' ? await monthSpendByCategory(db, date) : null;
+      // Editing without moving the date or account keeps the month it counts in (imported card entries stay put).
+      const bookDate = original && original.date === date && original.accountId === accountId && original.bookDate ? original.bookDate : await bookDateOf(db, date, accountId);
+      const before = kind === 'expense' ? await monthSpendByCategory(db, bookDate) : null;
       const id = await saveTransaction(db, {
+        bookDate,
         id: original?.id,
         kind,
         amount,
@@ -112,7 +126,7 @@ export default function EditTransaction() {
         sourceId: original?.sourceId ?? null,
       });
       for (const p of pending) await addAttachment(db, 'transaction', id, p);
-      const alerts = before ? await checkBudgetAlerts(db, date, categoryId, before) : [];
+      const alerts = before ? await checkBudgetAlerts(db, bookDate, categoryId, before) : [];
       router.back();
       if (alerts.length) setTimeout(() => Alert.alert(t('Budget alert'), alerts.join('\n\n')), 400);
     } catch (e) {
@@ -210,7 +224,7 @@ export default function EditTransaction() {
           />
         )}
 
-        <DateField label={t('Date')} value={date} onChange={setDate} />
+        <DateField label={t('Date')} value={date} onChange={setDate} hint={billMonthHint ?? undefined} />
 
         {!more ? (
           <Pressable onPress={() => setMore(true)} style={[styles.row, { paddingVertical: 6 }]}>

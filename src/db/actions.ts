@@ -7,7 +7,7 @@ import { getById, notifyChange, remove, save } from './repo';
 import { CATEGORY_IDS } from './seed';
 import { newId } from './util';
 
-type NewTxn = Omit<Txn, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type NewTxn = Omit<Txn, 'id' | 'createdAt' | 'updatedAt' | 'bookDate'> & { id?: string; bookDate?: string | null };
 
 export async function saveTransaction(db: SQLiteDatabase, txn: NewTxn) {
   return save(db, 'transactions', { ...txn });

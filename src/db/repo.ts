@@ -1,5 +1,6 @@
 import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
 
+import { bookDateFor } from '@/lib/cards';
 import { newId, nowIso } from './util';
 
 /** Tables that are shared in backups (and, later, family sync). */
@@ -46,6 +47,9 @@ export async function save(db: SQLiteDatabase, table: DataTable, row: Row, opts:
     const existing = await db.getFirstAsync<{ createdAt: string }>(`SELECT createdAt FROM ${table} WHERE id = ?`, full.id as string);
     full.createdAt = existing?.createdAt ?? now;
   }
+  if (table === 'transactions' && full.bookDate === undefined) {
+    full.bookDate = await bookDateOf(db, full.date as string, (full.accountId as string | null) ?? null);
+  }
   if (table === 'attachments') {
     delete full.updatedAt;
     full.createdAt = full.createdAt ?? now;
@@ -73,4 +77,14 @@ export async function remove(db: SQLiteDatabase, table: DataTable, ids: string |
 
 export async function getById<T>(db: SQLiteDatabase, table: DataTable, id: string) {
   return db.getFirstAsync<T>(`SELECT * FROM ${table} WHERE id = ?`, id);
+}
+
+/** The date an entry on this account counts on (see bookDateFor): the bill month for cards set up that way. */
+export async function bookDateOf(db: SQLiteDatabase, date: string, accountId: string | null) {
+  if (!accountId) return date;
+  const card = await db.getFirstAsync<{ statementDay: number | null; dueDay: number | null; billMonth: number }>(
+    "SELECT statementDay, dueDay, billMonth FROM accounts WHERE id = ? AND kind = 'card'",
+    accountId
+  );
+  return bookDateFor(date, card);
 }

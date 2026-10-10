@@ -156,7 +156,7 @@ test('dues gather everything coming up, oldest first, with overdue marked', () =
     active: 1,
     ...stamp,
   };
-  const card: Account = { id: 'c1', name: 'HDFC card', kind: 'card', openingBalance: 0, cardLimit: null, dueDay: 15, archived: 0, ...stamp };
+  const card: Account = { id: 'c1', name: 'HDFC card', kind: 'card', openingBalance: 0, cardLimit: null, dueDay: 15, statementDay: null, billMonth: 0, archived: 0, ...stamp };
   const items = collectDues(
     {
       recurring: [recurring, { ...recurring, id: 'r2', autoLog: 1 }],
@@ -213,4 +213,52 @@ test('stats periods: weeks start on Monday, financial years in April', async () 
   assert.equal(slices[6].value, 5);
   // Seven slices fit without folding one into "Other".
   assert.equal(topWithOther(entries.slice(0, 7), 6).length, 7);
+});
+
+test('credit-card cycles: statement on the 18th, due on the 6th', async () => {
+  const { bookDateFor, cardCycle, dueFor, lastStatementOn, statementFor } = await import('../cards');
+  assert.equal(statementFor('2026-10-10', 18), '2026-10-18');
+  assert.equal(statementFor('2026-10-18', 18), '2026-10-18'); // spends on the 18th are on that bill
+  assert.equal(statementFor('2026-10-19', 18), '2026-11-18');
+  assert.equal(dueFor('2026-10-18', 6), '2026-11-06');
+  assert.equal(dueFor('2026-12-18', 6), '2027-01-06');
+  // A due day after the statement day falls in the same month.
+  assert.equal(dueFor('2026-10-05', 25), '2026-10-25');
+  assert.equal(lastStatementOn('2026-10-25', 18), '2026-10-18');
+  assert.equal(lastStatementOn('2026-10-18', 18), '2026-10-18');
+  assert.equal(lastStatementOn('2026-10-10', 18), '2026-09-18');
+  assert.equal(lastStatementOn('2026-03-10', 31), '2026-02-28');
+
+  // Bill month: spent 19 Sep–18 Oct -> paid 6 Nov -> counts in November.
+  const card = { statementDay: 18, dueDay: 6, billMonth: 1 };
+  assert.equal(bookDateFor('2026-09-25', card), '2026-11-01');
+  assert.equal(bookDateFor('2026-10-18', card), '2026-11-01');
+  assert.equal(bookDateFor('2026-10-19', card), '2026-12-01');
+  assert.equal(bookDateFor('2026-09-25', { ...card, billMonth: 0 }), '2026-09-25');
+  assert.equal(bookDateFor('2026-09-25', null), '2026-09-25');
+
+  // ₹40,000 owed at the 18 Oct statement, ₹12,000 spent after it.
+  const txns = [
+    { kind: 'expense' as const, amount: 40000_00, date: '2026-10-02', accountId: 'c', toAccountId: null },
+    { kind: 'expense' as const, amount: 12000_00, date: '2026-10-22', accountId: 'c', toAccountId: null },
+    { kind: 'expense' as const, amount: 999_00, date: '2026-10-22', accountId: 'bank', toAccountId: null },
+  ];
+  const before = cardCycle('c', 0, txns, 18, 6, '2026-10-25');
+  assert.deepEqual([before.billed, before.unbilled, before.outstanding, before.billedDue, before.nextStatement], [40000_00, 12000_00, 52000_00, '2026-11-06', '2026-11-18']);
+  // Paying the bill on 2 Nov clears what's due; the October spends wait for the next bill.
+  const paid = cardCycle('c', 0, [...txns, { kind: 'transfer', amount: 40000_00, date: '2026-11-02', accountId: 'bank', toAccountId: 'c' }], 18, 6, '2026-11-03');
+  assert.deepEqual([paid.billed, paid.unbilled], [0, 12000_00]);
+  // A part payment leaves the rest of the bill due.
+  const part = cardCycle('c', 0, [...txns, { kind: 'transfer', amount: 10000_00, date: '2026-11-02', accountId: 'bank', toAccountId: 'c' }], 18, 6, '2026-11-03');
+  assert.equal(part.billed, 30000_00);
+});
+
+test('a card with a billing cycle reminds about the billed amount only', async () => {
+  const { collectDues } = await import('../dues');
+  const card: Account = { id: 'c1', name: 'HDFC card', kind: 'card', openingBalance: 0, cardLimit: null, dueDay: 6, statementDay: 18, billMonth: 1, archived: 0, ...stamp };
+  const base = { recurring: [], loans: [], policies: [], holdings: [] };
+  const due = collectDues({ ...base, cards: [{ account: card, outstanding: 52000_00, billed: 40000_00, billedDue: '2026-11-06' }] }, '2026-11-01', 7);
+  assert.deepEqual(due.map((d) => [d.kind, d.date, d.amount]), [['card', '2026-11-06', 40000_00]]);
+  // Bill paid: nothing due even though later spends are still outstanding.
+  assert.equal(collectDues({ ...base, cards: [{ account: card, outstanding: 12000_00, billed: 0, billedDue: '2026-11-06' }] }, '2026-11-01', 7).length, 0);
 });

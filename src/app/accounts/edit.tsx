@@ -7,6 +7,9 @@ import { AmountField, confirmDelete, SwitchRow } from '@/components/forms';
 import { Button, ChipSelect, Field, styles } from '@/components/ui';
 import { getById, remove, save } from '@/db/repo';
 import { t } from '@/i18n';
+import { dueFor, statementFor } from '@/lib/cards';
+import { monthTitle } from '@/lib/dates';
+import { formatDate, todayIso } from '@/lib/format';
 import { accountKindLabel } from '@/lib/labels';
 import type { Account, AccountKind } from '@/lib/types';
 import { showError } from '@/lib/useQuery';
@@ -22,6 +25,8 @@ export default function EditAccount() {
   const [opening, setOpening] = useState<number | null>(0);
   const [limit, setLimit] = useState<number | null>(null);
   const [dueDayText, setDueDayText] = useState('');
+  const [statementDayText, setStatementDayText] = useState('');
+  const [billMonth, setBillMonth] = useState(false);
   const [archived, setArchived] = useState(false);
 
   useEffect(() => {
@@ -36,15 +41,32 @@ export default function EditAccount() {
         setOpening(a.kind === 'card' ? -a.openingBalance : a.openingBalance);
         setLimit(a.cardLimit);
         setDueDayText(a.dueDay ? String(a.dueDay) : '');
+        setStatementDayText(a.statementDay ? String(a.statementDay) : '');
+        setBillMonth(!!a.billMonth);
         setArchived(!!a.archived);
       })
       .catch((e) => showError(t('Could not load data'), e));
   }, [db, id]);
 
+  // A worked example for the hint, from today's date.
+  const sDay = Number(statementDayText);
+  const dDay = Number(dueDayText);
+  const example =
+    sDay >= 1 && sDay <= 31 && dDay >= 1 && dDay <= 31
+      ? (() => {
+          const statement = statementFor(todayIso(), sDay);
+          const due = dueFor(statement, dDay);
+          return { statement: formatDate(statement), due: formatDate(due), month: monthTitle(due) };
+        })()
+      : null;
+
   async function onSave() {
     if (!name.trim()) return Alert.alert(t('Give the account a name'));
     const dueDay = dueDayText.trim() ? Number(dueDayText) : null;
     if (dueDay !== null && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)) return Alert.alert(t('The due day is a day of the month, 1 to 31'));
+    const statementDay = statementDayText.trim() ? Number(statementDayText) : null;
+    if (statementDay !== null && (!Number.isInteger(statementDay) || statementDay < 1 || statementDay > 31)) return Alert.alert(t('The statement day is a day of the month, 1 to 31'));
+    if (kind === 'card' && billMonth && (!statementDay || !dueDay)) return Alert.alert(t('Enter the statement day and the due day to count spends in the bill’s month.'));
     try {
       await save(db, 'accounts', {
         id: original?.id,
@@ -53,6 +75,8 @@ export default function EditAccount() {
         openingBalance: kind === 'card' ? -(opening ?? 0) : (opening ?? 0),
         cardLimit: kind === 'card' ? limit : null,
         dueDay: kind === 'card' ? dueDay : null,
+        statementDay: kind === 'card' ? statementDay : null,
+        billMonth: kind === 'card' && billMonth ? 1 : 0,
         archived: archived ? 1 : 0,
         createdAt: original?.createdAt,
       });
@@ -88,7 +112,24 @@ export default function EditAccount() {
         {kind === 'card' ? (
           <>
             <AmountField label={t('Credit limit')} value={limit} onChange={setLimit} />
-            <Field label={t('Bill due day (1–31)')} value={dueDayText} onChangeText={setDueDayText} keyboardType="number-pad" hint={t('You’ll be reminded before it while something is owed.')} />
+            <Field
+              label={t('Statement (bill) day (1–31)')}
+              value={statementDayText}
+              onChangeText={setStatementDayText}
+              keyboardType="number-pad"
+              hint={t('The day the bill is made, e.g. 18: spends up to and on the 18th are on that bill.')}
+            />
+            <Field label={t('Bill due day (1–31)')} value={dueDayText} onChangeText={setDueDayText} keyboardType="number-pad" hint={t('The last day to pay, e.g. 6 (of the next month).')} />
+            <SwitchRow
+              label={t('Count spends in the month the bill is paid')}
+              hint={
+                example
+                  ? t('A spend today goes on the {statement} bill, paid by {due}, so it counts in {month}. Applies to spends you add from now on; entries already in the app stay where they are.', example)
+                  : t('Needs the statement day and due day. Applies to spends you add from now on.')
+              }
+              value={billMonth}
+              onChange={setBillMonth}
+            />
           </>
         ) : null}
         {id ? <SwitchRow label={t('Archived')} hint={t('Hidden from pickers; old entries keep it.')} value={archived} onChange={setArchived} /> : null}

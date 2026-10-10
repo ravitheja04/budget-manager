@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { monthRange } from '@/lib/dates';
+import { cardCycle, type CardTxn } from '@/lib/cards';
 import { collectDues, type DueItem } from '@/lib/dues';
 import { holdingValue } from '@/lib/holdings';
 import { loanStatus, type LoanStatus } from '@/lib/loans';
@@ -46,8 +47,9 @@ export async function listTransactions(db: SQLiteDatabase, f: TxnFilter = {}) {
     where.push(clause);
     args.push(...values);
   };
-  if (f.from) add('t.date >= ?', f.from);
-  if (f.to) add('t.date <= ?', f.to);
+  // Periods go by the date an entry counts on (the bill month for some cards).
+  if (f.from) add('COALESCE(t.bookDate, t.date) >= ?', f.from);
+  if (f.to) add('COALESCE(t.bookDate, t.date) <= ?', f.to);
   if (f.kind) add('t.kind = ?', f.kind);
   if (f.categoryId) add('t.categoryId = ?', f.categoryId);
   if (f.uncategorised) add('t.categoryId IS NULL');
@@ -105,7 +107,7 @@ export async function monthTotals(db: SQLiteDatabase, date: string) {
   const row = await db.getFirstAsync<{ income: number | null; expense: number | null }>(
     `SELECT SUM(CASE WHEN kind = 'income' THEN amount END) AS income,
             SUM(CASE WHEN kind = 'expense' THEN amount END) AS expense
-     FROM transactions WHERE date BETWEEN ? AND ?`,
+     FROM transactions WHERE COALESCE(bookDate, date) BETWEEN ? AND ?`,
     start,
     end
   );
@@ -116,7 +118,7 @@ export async function monthTotals(db: SQLiteDatabase, date: string) {
 export async function monthSpendByCategory(db: SQLiteDatabase, date: string) {
   const { start, end } = monthRange(date);
   const rows = await db.getAllAsync<{ categoryId: string | null; total: number }>(
-    `SELECT categoryId, SUM(amount) AS total FROM transactions WHERE kind = 'expense' AND date BETWEEN ? AND ? GROUP BY categoryId`,
+    `SELECT categoryId, SUM(amount) AS total FROM transactions WHERE kind = 'expense' AND COALESCE(bookDate, date) BETWEEN ? AND ? GROUP BY categoryId`,
     start,
     end
   );
@@ -205,7 +207,14 @@ export async function loadDues(db: SQLiteDatabase, today: string, horizonDays: n
       loans: loans.map(({ loan, status }) => ({ loan, nextEmiDate: status.nextEmiDate, nextEmiAmount: status.nextEmi?.amount ?? null, outstanding: status.outstanding })),
       policies,
       holdings,
-      cards: accounts.filter((a) => a.kind === 'card').map((a) => ({ account: a, outstanding: -a.balance })),
+      cards: await Promise.all(
+        accounts
+          .filter((a) => a.kind === 'card')
+          .map(async (a) => {
+            const cycle = await cardCycleFor(db, a, today);
+            return { account: a, outstanding: -a.balance, billed: cycle?.billed, billedDue: cycle?.billedDue };
+          })
+      ),
     },
     today,
     horizonDays
@@ -240,7 +249,7 @@ export async function categoryTotals(db: SQLiteDatabase, kind: 'income' | 'expen
   return db.getAllAsync<CategoryTotal>(
     `SELECT t.categoryId, c.name, c.icon, c.color, SUM(t.amount) AS total, COUNT(*) AS count
      FROM transactions t LEFT JOIN categories c ON c.id = t.categoryId
-     WHERE t.kind = ? AND t.date BETWEEN ? AND ?
+     WHERE t.kind = ? AND COALESCE(t.bookDate, t.date) BETWEEN ? AND ?
      GROUP BY t.categoryId ORDER BY total DESC`,
     kind,
     from,
@@ -262,4 +271,11 @@ export async function movedOut(db: SQLiteDatabase, from: string, to: string) {
 
 export async function firstEntryDate(db: SQLiteDatabase) {
   return (await db.getFirstAsync<{ d: string | null }>('SELECT MIN(date) AS d FROM transactions'))?.d ?? null;
+}
+
+/** Billed and unbilled amounts for a card with a statement and due day; null for other accounts. */
+export async function cardCycleFor(db: SQLiteDatabase, account: Account, today: string) {
+  if (account.kind !== 'card' || !account.statementDay || !account.dueDay) return null;
+  const txns = await db.getAllAsync<CardTxn>('SELECT kind, amount, date, accountId, toAccountId FROM transactions WHERE accountId = ? OR toAccountId = ?', account.id, account.id);
+  return cardCycle(account.id, account.openingBalance, txns, account.statementDay, account.dueDay, today);
 }

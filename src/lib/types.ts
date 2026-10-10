@@ -13,6 +13,10 @@ export type Account = {
   /** Credit cards only. */
   cardLimit: number | null;
   dueDay: number | null;
+  /** Credit cards: the day the statement is made. */
+  statementDay: number | null;
+  /** Credit cards: 1 = spends count in the month their bill is paid. */
+  billMonth: number;
   archived: number;
   createdAt: string;
   updatedAt: string;
@@ -29,6 +33,8 @@ export type Txn = {
   kind: TxnKind;
   amount: number;
   date: string;
+  /** The date it counts on in budgets and Stats; the 1st of the bill month for cards set up that way, else the same as date. */
+  bookDate: string | null;
   accountId: string | null;
   toAccountId: string | null;
   categoryId: string | null;

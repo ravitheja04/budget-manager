@@ -16,9 +16,10 @@ The full feature plan is in [docs/features.md](docs/features.md).
 - **Insurance**: every policy, with extra fields for health cover (cover type, deductible, NCB, room rent, co-pay, waiting period, TPA) and term cover (riders, MWPA). It also shows cover per person, premiums per year, the grace period, call buttons for the insurer, agent and TPA, and attached policy documents. Marking a premium paid logs it and moves the due date on.
 - **Upcoming**: one list of everything due in the next 60 days (bills, EMIs, premiums, contributions, card bills, maturities, policy end dates, lent money), plus anything overdue.
 - **Reminders**: opt-in phone notifications before each due date (premiums at 30, 15, 7 and 1 day before), plus budget alerts.
+- **Import from a spreadsheet** (Settings → Import): bring in history from a Money Manager export, any Excel sheet (.xlsx) or a CSV, including bank statements with Debit/Credit columns. You see everything before it's saved. Each of your categories is matched to an app category, kept under its own name, or treated as a transfer (chits, SSY, PPF and SIPs, so savings aren't counted as spending). "CC bill" rows can be logged as card bill payments. Importing the same file again skips what's already there. Afterwards the app offers to set up monthly regulars it spots (rent, salary, chits, EMIs) as recurring entries. Old binary .xls files need to be saved as .xlsx or .csv first.
 - **Settings**: family members, editable categories, app lock (fingerprint, face or phone PIN), light/dark theme, English/Telugu, and an encrypted backup and restore (AES-256-GCM with a password). Restore merges with what's on the phone: the newer version of each row wins, and deletions carry over.
 
-Not yet built (planned for phase 2 and later): reports and charts, CSV/PDF export, financial-year tax view, savings goals and sinking funds, claims log, split transactions and tags, budget rollover, SMS/statement import, receipt OCR, family sync, and the home-screen widget. Backups don't include attached receipt files.
+Not yet built (planned for phase 2 and later): reports and charts, CSV/PDF export, financial-year tax view, savings goals and sinking funds, claims log, split transactions and tags, budget rollover, SMS import, PDF statement import, receipt OCR, family sync, and the home-screen widget. Backups don't include attached receipt files.
 
 ## Development
 
@@ -27,14 +28,14 @@ npm ci
 npx expo start          # dev server (needs a development build for native modules)
 npx tsc --noEmit        # typecheck
 npx expo lint           # lint
-npm test                # unit tests for money, dates, EMI, deposits, loans, budgets, dues, backup encoding
+npm test                # unit tests for money, dates, EMI, deposits, loans, budgets, dues, backup encoding, spreadsheet import
 ```
 
 Code layout:
 
 - `src/app/`: screens (Expo Router). The tabs are in `src/app/(tabs)/`.
 - `src/db/`: schema and migrations, seed categories, queries, and actions (mark paid, skip, reconcile).
-- `src/lib/`: pure logic (money, dates, EMI/FD/RD maths, loan status, due items, budgets) plus reminders, backup and attachments.
+- `src/lib/`: pure logic (money, dates, EMI/FD/RD maths, loan status, due items, budgets, spreadsheet import in `src/lib/import/`) plus reminders, backup and attachments.
 - `src/components/`: shared UI.
 
 Amounts are stored as integer paise and dates as `YYYY-MM-DD`.

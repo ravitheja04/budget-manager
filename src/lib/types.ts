@@ -19,11 +19,11 @@ export type Account = {
 };
 
 export type CategoryKind = 'expense' | 'income';
-export type Category = { id: string; name: string; kind: CategoryKind; icon: string; color: string; sort: number };
+export type Category = { id: string; name: string; kind: CategoryKind; icon: string; color: string; sort: number; updatedAt: string };
 
 export type TxnKind = 'expense' | 'income' | 'transfer';
 /** What an entry was logged for, so a loan or policy can list its own payments. */
-export type SourceType = 'recurring' | 'loan' | 'policy' | 'holding';
+export type SourceType = 'recurring' | 'loan' | 'policy' | 'holding' | 'adjustment';
 export type Txn = {
   id: string;
   kind: TxnKind;
@@ -53,13 +53,17 @@ export type Recurring = {
   frequency: Frequency;
   startDate: string;
   nextDate: string;
+  /** 1: logged by itself on the date; 0: shown as due until confirmed. */
+  autoLog: number;
+  /** Days before the date to send a reminder; -1 for none. */
+  reminderDays: number;
   active: number;
   createdAt: string;
   updatedAt: string;
 };
 
 /** categoryId null is the overall monthly budget. */
-export type Budget = { id: string; categoryId: string | null; amount: number; createdAt: string; updatedAt: string };
+export type Budget = { id: string; categoryId: string | null; amount: number; /** Notify at 80% and 100%. */ alerts: number; createdAt: string; updatedAt: string };
 
 export type HoldingType =
   | 'savings'
@@ -128,7 +132,8 @@ export type Loan = {
   updatedAt: string;
 };
 
-export type LoanPaymentKind = 'emi' | 'prepayment' | 'repayment';
+/** "opening" stands for the EMIs paid before the loan was added to the app. */
+export type LoanPaymentKind = 'emi' | 'prepayment' | 'repayment' | 'opening';
 export type LoanPayment = {
   id: string;
   loanId: string;
@@ -138,7 +143,10 @@ export type LoanPayment = {
   principal: number;
   interest: number;
   transactionId: string | null;
+  /** How many EMIs an "opening" record covers. */
+  emiCount: number | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type PolicyKind = 'health' | 'term' | 'life' | 'vehicle' | 'home' | 'accident' | 'other';
@@ -185,3 +193,5 @@ export type Policy = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type Attachment = { id: string; ownerType: string; ownerId: string; name: string; uri: string; mime: string; createdAt: string };

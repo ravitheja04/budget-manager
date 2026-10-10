@@ -1,2 +1,42 @@
-# budget-manager
-one step solution 
+# Budget Logger
+
+A private, offline money app for Indian families (Android and iOS, built with Expo). It keeps expenses and income, budgets, savings and investments, loans and insurance policies in one place, and reminds you before anything is due. All data stays on the phone in SQLite: no accounts, no bank logins, no servers.
+
+The full feature plan is in [docs/features.md](docs/features.md).
+
+## What's in this version (phase 1)
+
+- **Home**: this month's income, spending and savings against the budget (with a marker for where you should be by today), items needing attention in the next 7 days, net worth, recent entries, and a quick-add button. A "hide amounts" eye icon covers the numbers when others are looking.
+- **Transactions**: quick add (amount, then category, then save), with expense, income and transfer types. Optional payee, family member, notes and receipt photos or PDFs. Grouped by day with daily totals. You can search, filter by category, account or member, and step through months.
+- **Recurring entries**: rent, salary, fees, subscriptions. Each one either logs itself on the day or stays "due" until you confirm it, with a reminder.
+- **Accounts**: bank, cash, wallets/UPI and credit cards, each with a running balance. Cards track the limit, due day and amount outstanding, and have a "pay the bill" button. "Match with the bank balance" records the difference as an adjustment.
+- **Budgets**: an overall monthly budget plus per-category budgets, with progress against the month's pace. Alerts at 80% and 100%.
+- **Savings and investments**: FD, RD, PPF, SSY, EPF, NPS, mutual funds/SIP, stocks, gold, post-office schemes, chit funds, property. FD values are worked out with quarterly compounding; FD/RD maturity amounts are estimated. Also covers contributions (mark paid or skip), nominees, the next 12 months of maturities and an asset-allocation bar.
+- **Loans**: borrowed money (with EMI) and money lent. The EMI is worked out on the reducing balance. You get outstanding principal, interest paid, EMIs left and the closure date, a full repayment schedule, and a prepayment calculator. Marking an EMI paid logs the interest as an expense and the principal as a transfer. A loan added part-way through can count its earlier EMIs as already paid.
+- **Insurance**: every policy, with extra fields for health cover (cover type, deductible, NCB, room rent, co-pay, waiting period, TPA) and term cover (riders, MWPA). It also shows cover per person, premiums per year, the grace period, call buttons for the insurer, agent and TPA, and attached policy documents. Marking a premium paid logs it and moves the due date on.
+- **Upcoming**: one list of everything due in the next 60 days (bills, EMIs, premiums, contributions, card bills, maturities, policy end dates, lent money), plus anything overdue.
+- **Reminders**: opt-in phone notifications before each due date (premiums at 30, 15, 7 and 1 day before), plus budget alerts.
+- **Settings**: family members, editable categories, app lock (fingerprint, face or phone PIN), light/dark theme, English/Telugu, and an encrypted backup and restore (AES-256-GCM with a password). Restore merges with what's on the phone: the newer version of each row wins, and deletions carry over.
+
+Not yet built (planned for phase 2 and later): reports and charts, CSV/PDF export, financial-year tax view, savings goals and sinking funds, claims log, split transactions and tags, budget rollover, SMS/statement import, receipt OCR, family sync, and the home-screen widget. Backups don't include attached receipt files.
+
+## Development
+
+```bash
+npm ci
+npx expo start          # dev server (needs a development build for native modules)
+npx tsc --noEmit        # typecheck
+npx expo lint           # lint
+npm test                # unit tests for money, dates, EMI, deposits, loans, budgets, dues, backup encoding
+```
+
+Code layout:
+
+- `src/app/`: screens (Expo Router). The tabs are in `src/app/(tabs)/`.
+- `src/db/`: schema and migrations, seed categories, queries, and actions (mark paid, skip, reconcile).
+- `src/lib/`: pure logic (money, dates, EMI/FD/RD maths, loan status, due items, budgets) plus reminders, backup and attachments.
+- `src/components/`: shared UI.
+
+Amounts are stored as integer paise and dates as `YYYY-MM-DD`.
+
+To build an installable Android APK, run the **Android APK** workflow from the Actions tab.

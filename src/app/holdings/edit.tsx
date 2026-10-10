@@ -14,6 +14,7 @@ import { isValidDate } from '@/lib/format';
 import { HOLDING_FIELDS, HOLDING_LABELS, HOLDING_TYPES } from '@/lib/holdings';
 import { frequencyLabel } from '@/lib/labels';
 import { parseRate } from '@/lib/money';
+import { maturityFrom, SCHEME_DEFAULTS } from '@/lib/terms';
 import type { Holding, HoldingType, Member } from '@/lib/types';
 import { showError } from '@/lib/useQuery';
 
@@ -52,6 +53,7 @@ export default function EditHolding() {
   const [contribution, setContribution] = useState<number | null>(null);
   const [frequency, setFrequency] = useState<Frequency>('monthly');
   const [nextContribution, setNextContribution] = useState<string | null>(null);
+  const [payYearsText, setPayYearsText] = useState('');
   const [accountId, setAccountId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
@@ -80,6 +82,7 @@ export default function EditHolding() {
       setContribution(h.contribution);
       setFrequency(h.contributionFrequency ?? 'monthly');
       setNextContribution(h.nextContributionDate);
+      setPayYearsText(h.payYears ? String(h.payYears) : '');
       setAccountId(h.accountId);
       setNotes(h.notes);
     })().catch((e) => showError(t('Could not load data'), e));
@@ -110,6 +113,7 @@ export default function EditHolding() {
         contribution: f.contribution ? contribution : null,
         contributionFrequency: f.contribution && contribution ? frequency : null,
         nextContributionDate: f.contribution && contribution ? nextContribution : null,
+        payYears: f.contribution ? Number(payYearsText) || null : null,
         accountId,
         notes: notes.trim(),
         closed: original?.closed ?? 0,
@@ -126,7 +130,16 @@ export default function EditHolding() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: id ? t('Edit holding') : t('New holding') }} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 }]} keyboardShouldPersistTaps="handled">
-        <ChipSelect label={t('Type')} options={HOLDING_TYPES} value={type} onChange={(v) => v && setType(v)} renderLabel={(v) => t(HOLDING_LABELS[v])} />
+        <ChipSelect label={t('Type')} options={HOLDING_TYPES} value={type} onChange={(v) => {
+            if (!v) return;
+            setType(v);
+            // SSY and PPF: deposits for 15 years, yearly.
+            const scheme = SCHEME_DEFAULTS[v as 'ssy' | 'ppf'];
+            if (scheme && !payYearsText) setPayYearsText(String(scheme.payYears));
+            if (scheme && startDate && isValidDate(startDate) && !maturityDate) setMaturityDate(maturityFrom(startDate, scheme.maturityYears));
+          }}
+          renderLabel={(v) => t(HOLDING_LABELS[v])}
+        />
         {type === 'savings' ? <Text style={styles.hint}>{t('Already tracking this bank account under Accounts? Then there’s no need to add it here too.')}</Text> : null}
         <Field label={t('Name')} value={name} onChangeText={setName} placeholder={t(NAME_HINT[type] ?? 'A name you’ll recognise')} />
         <Field label={t('Bank / institution / fund house')} value={institution} onChangeText={setInstitution} />
@@ -135,7 +148,17 @@ export default function EditHolding() {
         {f.rate ? <Field label={t('Interest rate (% per year)')} value={rateText} onChangeText={setRateText} keyboardType="decimal-pad" placeholder="7.1" /> : null}
         {f.dates ? (
           <>
-            <DateField label={t('Start date')} value={startDate} onChange={setStartDate} />
+            <DateField
+              label={t('Start date')}
+              value={startDate}
+              onChange={(v) => {
+                setStartDate(v);
+                // Sukanya Samriddhi matures 21 years after opening, PPF after 15: fill it in if not set.
+                const scheme = SCHEME_DEFAULTS[type as 'ssy' | 'ppf'];
+                if (scheme && v && isValidDate(v) && !maturityDate) setMaturityDate(maturityFrom(v, scheme.maturityYears));
+              }}
+              hint={SCHEME_DEFAULTS[type as 'ssy' | 'ppf'] ? t('The opening date. The maturity date is filled in for you.') : undefined}
+            />
             <DateField label={t('Maturity date')} value={maturityDate} onChange={setMaturityDate} hint={t('You’ll get reminders 30 and 7 days before.')} />
           </>
         ) : null}
@@ -147,6 +170,14 @@ export default function EditHolding() {
               <>
                 <ChipSelect label={t('How often')} options={FREQUENCIES} value={frequency} onChange={(v) => v && setFrequency(v)} renderLabel={frequencyLabel} />
                 <DateField label={t('Next contribution date')} value={nextContribution} onChange={setNextContribution} />
+                <Field
+                  label={t('Paid for how many years')}
+                  value={payYearsText}
+                  onChangeText={setPayYearsText}
+                  keyboardType="number-pad"
+                  placeholder={SCHEME_DEFAULTS[type as 'ssy' | 'ppf'] ? String(SCHEME_DEFAULTS[type as 'ssy' | 'ppf']!.payYears) : t('e.g. 15')}
+                  hint={type === 'ssy' ? t('Sukanya Samriddhi takes deposits for 15 years and matures at 21.') : t('Deposits stop after this many years from the start date; the maturity can be later.')}
+                />
                 <RecordPicker label={t('Paid from')} items={accounts} value={accountId} onChange={setAccountId} getLabel={(a) => a.name} allowNone noneLabel={t('Not set')} />
               </>
             ) : null}

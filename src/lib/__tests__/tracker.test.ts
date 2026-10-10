@@ -99,6 +99,7 @@ const baseHolding: Holding = {
   contribution: null,
   contributionFrequency: null,
   nextContributionDate: null,
+  payYears: null,
   accountId: null,
   notes: '',
   closed: 0,
@@ -147,6 +148,7 @@ test('dues gather everything coming up, oldest first, with overdue marked', () =
     graceDays: 30,
     startDate: null,
     endDate: null,
+    payYears: null,
     agentName: '',
     agentPhone: '',
     helpline: '',
@@ -261,4 +263,37 @@ test('a card with a billing cycle reminds about the billed amount only', async (
   assert.deepEqual(due.map((d) => [d.kind, d.date, d.amount]), [['card', '2026-11-06', 40000_00]]);
   // Bill paid: nothing due even though later spends are still outstanding.
   assert.equal(collectDues({ ...base, cards: [{ account: card, outstanding: 12000_00, billed: 0, billedDue: '2026-11-06' }] }, '2026-11-01', 7).length, 0);
+});
+
+test('premium and deposit terms: paid so far, left to pay, cover left', async () => {
+  const { lastPaymentDate, maturityFrom, nextPaymentWithinTerm, scheduleProgress } = await import('../terms');
+  // Term policy: yearly ₹24,000 for 10 years from Mar 2020, cover till Mar 2055; next premium Mar 2027.
+  const term = scheduleProgress({ start: '2020-03-15', frequency: 'yearly', next: '2027-03-15', payYears: 10, amount: 24000_00, end: '2055-03-15' }, '2026-10-10');
+  assert.deepEqual(
+    [term.paidCount, term.totalCount, term.leftCount, term.paidAmount, term.leftAmount, term.yearsLeftToPay, term.lastPayment, term.finished],
+    [7, 10, 3, 168000_00, 72000_00, 3, '2029-03-15', false]
+  );
+  assert.equal(term.coverYearsLeft, 28.4);
+  assert.equal(term.coverYearsTotal, 35);
+  // Monthly LIC premium: counts months.
+  const lic = scheduleProgress({ start: '2024-01-05', frequency: 'monthly', next: '2026-11-05', payYears: 12, amount: 5000_00, end: '2044-01-05' }, '2026-10-10');
+  assert.deepEqual([lic.paidCount, lic.totalCount, lic.yearsPaid, lic.yearsLeftToPay], [34, 144, 2.8, 9.2]);
+  // Sukanya Samriddhi: yearly deposits for 15 years, matures at 21.
+  const ssy = scheduleProgress({ start: '2021-04-10', frequency: 'yearly', next: '2027-04-10', payYears: 15, amount: 150000_00, end: maturityFrom('2021-04-10', 21) }, '2026-10-10');
+  assert.deepEqual([ssy.paidCount, ssy.leftCount, ssy.lastPayment, ssy.coverYearsTotal], [6, 9, '2035-04-10', 21]);
+  // Paying term over: no next date.
+  const done = scheduleProgress({ start: '2010-01-01', frequency: 'yearly', next: null, payYears: 10, amount: 1000_00, end: '2040-01-01' }, '2026-10-10');
+  assert.deepEqual([done.paidCount, done.leftCount, done.finished], [10, 0, true]);
+  // Single premium.
+  const single = scheduleProgress({ start: '2025-06-01', frequency: 'single', next: null, payYears: null, amount: 50000_00, end: '2040-06-01' }, '2026-10-10');
+  assert.deepEqual([single.paidCount, single.totalCount, single.leftCount, single.finished], [1, 1, 0, true]);
+  // Term unknown: count what's been paid, nothing about what's left.
+  const open = scheduleProgress({ start: '2024-04-01', frequency: 'yearly', next: '2027-04-01', payYears: null, amount: 1000_00, end: null }, '2026-10-10');
+  assert.deepEqual([open.paidCount, open.totalCount, open.leftCount], [3, null, null]);
+
+  assert.equal(lastPaymentDate('2020-03-15', 'yearly', 10), '2029-03-15');
+  const step = (d: string) => `${Number(d.slice(0, 4)) + 1}${d.slice(4)}`;
+  assert.equal(nextPaymentWithinTerm('2028-03-15', '2020-03-15', 'yearly', 10, step), '2029-03-15');
+  assert.equal(nextPaymentWithinTerm('2029-03-15', '2020-03-15', 'yearly', 10, step), null); // that was the last one
+  assert.equal(nextPaymentWithinTerm('2029-03-15', '2020-03-15', 'yearly', null, step), '2030-03-15'); // no term: keep going
 });

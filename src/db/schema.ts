@@ -207,6 +207,11 @@ const MIGRATIONS: string[] = [
   UPDATE transactions SET bookDate = date WHERE bookDate IS NULL;
   CREATE INDEX IF NOT EXISTS transactions_book_date ON transactions (bookDate);
   `,
+  // 3: how many years premiums / deposits are paid for (the cover or maturity can run longer).
+  `
+  ALTER TABLE policies ADD COLUMN payYears INTEGER;
+  ALTER TABLE holdings ADD COLUMN payYears INTEGER;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase) {

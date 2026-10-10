@@ -107,6 +107,8 @@ export type Holding = {
   contribution: number | null;
   contributionFrequency: Frequency | null;
   nextContributionDate: string | null;
+  /** Years deposits are made for (SSY 15, PPF 15); maturity can be later. */
+  payYears: number | null;
   accountId: string | null;
   notes: string;
   closed: number;
@@ -189,6 +191,8 @@ export type Policy = {
   startDate: string | null;
   /** When the cover ends (term) or the policy matures (life). */
   endDate: string | null;
+  /** Premium paying term in years; cover can run longer. */
+  payYears: number | null;
   agentName: string;
   agentPhone: string;
   helpline: string;

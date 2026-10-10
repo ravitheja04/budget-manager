@@ -12,7 +12,15 @@ import { formatDate, todayIso } from '@/lib/format';
 import { ASSET_CLASS, HOLDING_ICONS, HOLDING_LABELS, HOLDING_TYPES, holdingValue, type AssetClass } from '@/lib/holdings';
 import { formatMoney, formatMoneyShort } from '@/lib/money';
 import type { Holding } from '@/lib/types';
+import { scheduleProgress } from '@/lib/terms';
 import { useQuery } from '@/lib/useQuery';
+
+/** "6 of 15 yrs paid" for schemes with a deposit term (SSY, PPF, RD…). */
+function depositLine(h: Holding, today: string) {
+  if (!h.startDate || !h.payYears || !h.contribution || !h.contributionFrequency) return null;
+  const p = scheduleProgress({ start: h.startDate, frequency: h.contributionFrequency, next: h.nextContributionDate, payYears: h.payYears, amount: h.contribution, end: h.maturityDate }, today);
+  return p.finished ? t('deposits done') : t('{paid} of {total} yrs paid', { paid: p.yearsPaid, total: h.payYears });
+}
 
 const CLASS_COLORS: Record<AssetClass, string> = { equity: '#2563EB', debt: '#16A34A', gold: '#CA8A04', cash: '#0891B2', property: '#7C3AED', other: '#94A3B8' };
 const classLabel = (c: AssetClass) => ({ equity: t('Equity'), debt: t('Debt'), gold: t('Gold'), cash: t('Cash'), property: t('Property'), other: t('Other') })[c];
@@ -83,7 +91,7 @@ export default function Savings() {
                     onPress={() => router.push({ pathname: '/holdings/[id]', params: { id: h.id } })}
                     left={<CategoryIcon icon={HOLDING_ICONS[h.type]} color={colors.primary} size={36} />}
                     title={h.name}
-                    subtitle={[h.institution, h.memberName, h.maturityDate ? t('matures {date}', { date: formatDate(h.maturityDate) }) : null].filter(Boolean).join(' · ')}
+                    subtitle={[h.institution, h.memberName, depositLine(h, today), h.maturityDate ? t('matures {date}', { date: formatDate(h.maturityDate) }) : null].filter(Boolean).join(' · ')}
                     right={formatMoney(value(h))}
                   />
                 ))}

@@ -10,6 +10,7 @@ import { savePolicyMembers } from '@/db/actions';
 import { listAccounts, listMembers, policyMemberIds, type AccountWithBalance } from '@/db/queries';
 import { getById, notifyChange, save } from '@/db/repo';
 import { t } from '@/i18n';
+import { addMonths } from '@/lib/dates';
 import { isValidDate } from '@/lib/format';
 import { frequencyLabel, HEALTH_COVER_TYPES, POLICY_KINDS, policyKindLabel } from '@/lib/labels';
 import type { Member, Policy, PolicyDetails, PolicyKind, PremiumFrequency } from '@/lib/types';
@@ -35,6 +36,8 @@ export default function EditPolicy() {
   const [graceText, setGraceText] = useState('30');
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [payYearsText, setPayYearsText] = useState('');
+  const [termYearsText, setTermYearsText] = useState('');
   const [agentName, setAgentName] = useState('');
   const [agentPhone, setAgentPhone] = useState('');
   const [helpline, setHelpline] = useState('');
@@ -69,6 +72,7 @@ export default function EditPolicy() {
       setGraceText(String(p.graceDays));
       setStartDate(p.startDate);
       setEndDate(p.endDate);
+      setPayYearsText(p.payYears ? String(p.payYears) : '');
       setAgentName(p.agentName);
       setAgentPhone(p.agentPhone);
       setHelpline(p.helpline);
@@ -83,6 +87,8 @@ export default function EditPolicy() {
   async function onSave() {
     if (!insurer.trim()) return Alert.alert(t('Enter the insurer'));
     for (const d of [nextDue, startDate, endDate, details.waitingPeriodEnds ?? null]) if (d && !isValidDate(d)) return Alert.alert(t('Enter a valid date'));
+    if (payYearsText.trim() && !(Number.isInteger(Number(payYearsText)) && Number(payYearsText) > 0 && Number(payYearsText) < 100)) return Alert.alert(t('Enter the premium paying term in whole years, like 10'));
+    if (payYearsText.trim() && !startDate) return Alert.alert(t('Enter the start date too, so the app can count the premiums paid.'));
     const keep: PolicyDetails =
       kind === 'health'
         ? { coverType: details.coverType, deductible: details.deductible, noClaimBonus: details.noClaimBonus, roomRent: details.roomRent, copay: details.copay, waitingPeriodEnds: details.waitingPeriodEnds, tpa: details.tpa, tpaPhone: details.tpaPhone }
@@ -110,6 +116,7 @@ export default function EditPolicy() {
           graceDays: Number(graceText) || 0,
           startDate,
           endDate,
+          payYears: frequency === 'single' ? null : Number(payYearsText) || null,
           agentName: agentName.trim(),
           agentPhone: agentPhone.trim(),
           helpline: helpline.trim(),
@@ -151,9 +158,31 @@ export default function EditPolicy() {
         <AmountField label={kind === 'health' ? t('Sum insured') : kind === 'vehicle' ? t('IDV') : t('Sum assured')} value={sumAssured} onChange={setSumAssured} />
         <AmountField label={t('Premium')} value={premium} onChange={setPremium} />
         <ChipSelect label={t('Premium paid')} options={PREMIUM_FREQUENCIES} value={frequency} onChange={(v) => v && setFrequency(v)} renderLabel={frequencyLabel} />
+        {frequency !== 'single' ? (
+          <Field
+            label={t('Premium paying term (years)')}
+            value={payYearsText}
+            onChangeText={setPayYearsText}
+            keyboardType="number-pad"
+            placeholder={t('e.g. 10')}
+            hint={t('How many years premiums are paid. Cover can last longer (a term plan may take premiums for 10 years and cover you for 35).')}
+          />
+        ) : null}
         {frequency !== 'single' ? <DateField label={t('Next due date')} value={nextDue} onChange={setNextDue} hint={t('Reminders go out 30, 15, 7 and 1 day before.')} /> : null}
         <Field label={t('Grace period (days)')} value={graceText} onChangeText={setGraceText} keyboardType="number-pad" />
-        <DateField label={t('Start date')} value={startDate} onChange={setStartDate} />
+        <DateField label={t('Start date')} value={startDate} onChange={setStartDate} hint={t('The date of the first premium.')} />
+        <Field
+          label={t('Policy term (years)')}
+          value={termYearsText}
+          onChangeText={(v) => {
+            setTermYearsText(v);
+            const n = Number(v);
+            if (startDate && isValidDate(startDate) && Number.isInteger(n) && n > 0 && n < 100) setEndDate(addMonths(startDate, n * 12));
+          }}
+          keyboardType="number-pad"
+          placeholder={t('e.g. 35')}
+          hint={startDate && isValidDate(startDate) ? t('Fills in the date below from the start date.') : t('Enter the start date first to work out the end date.')}
+        />
         <DateField label={kind === 'life' ? t('Maturity date') : t('Cover ends on')} value={endDate} onChange={setEndDate} />
         <Field label={t('Nominee(s) and share')} value={nominees} onChangeText={setNominees} placeholder={t('e.g. Lakshmi (wife) 100%')} />
 

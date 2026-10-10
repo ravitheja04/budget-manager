@@ -157,6 +157,18 @@ export default function Settings() {
           <ListRow left={<Icon name="cloud-download-outline" color={colors.primary} />} title={t('Restore from a backup')} subtitle={t('Merges with what is here; newer entries win.')} onPress={startRestore} />
         </Card>
 
+        <SectionTitle>{t('Import')}</SectionTitle>
+        <Card>
+          <ListRow
+            left={<Icon name="document-text-outline" color={colors.primary} />}
+            title={t('Import from a spreadsheet')}
+            subtitle={t('Money Manager export, Excel (.xlsx) or CSV')}
+            right="›"
+            rightColor={colors.muted}
+            onPress={() => router.push('/import')}
+          />
+        </Card>
+
         <Text style={[styles.hint, { textAlign: 'center', marginTop: 12 }]}>{t('Budget Logger keeps records and reminds. It never gives financial advice.')}</Text>
       </ScrollView>
 

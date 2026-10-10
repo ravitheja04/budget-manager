@@ -20,7 +20,8 @@ const TABS: { name: string; title: () => string; label?: () => string; icon: str
   { name: 'budgets', title: () => t('Budgets'), icon: 'pie-chart' },
   { name: 'savings', title: () => t('Savings'), icon: 'trending-up' },
   { name: 'loans', title: () => t('Loans'), icon: 'cash' },
-  { name: 'insurance', title: () => t('Insurance'), icon: 'shield-checkmark' },
+  { name: 'insurance', title: () => t('Insurance'), label: () => t('Policies'), icon: 'shield-checkmark' },
+  { name: 'guide', title: () => t('Guide'), icon: 'help-circle' },
 ];
 
 export default function TabsLayout() {
@@ -34,7 +35,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 10 },
+        tabBarLabelStyle: { fontSize: 9 },
         sceneStyle: { backgroundColor: colors.bg },
       }}>
       {TABS.map((tab) => (

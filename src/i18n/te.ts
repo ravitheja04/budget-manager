@@ -5,6 +5,8 @@ const te: Record<string, string> = {
   Transactions: 'లావాదేవీలు',
   Entries: 'నమోదులు',
   Stats: 'గణాంకాలు',
+  Guide: 'గైడ్',
+  Policies: 'పాలసీలు',
   Expenses: 'ఖర్చులు',
   Week: 'వారం',
   Month: 'నెల',

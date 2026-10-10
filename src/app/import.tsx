@@ -10,7 +10,7 @@ import { ListRow, Stat, SwitchRow } from '@/components/forms';
 import { Button, Card, colors, Icon, SectionTitle, styles } from '@/components/ui';
 import { applyImport, createRecurringFromImport, matchAccounts, type AccountChoice, type ImportResult } from '@/db/importer';
 import { listAccounts, listCategories, type AccountWithBalance } from '@/db/queries';
-import { t } from '@/i18n';
+import { t, tn } from '@/i18n';
 import { formatDate, todayIso } from '@/lib/format';
 import { CARD_BILL, guessAccountKind, sourceCategories, suggestTarget, type SourceCategory, type Target } from '@/lib/import/mapping';
 import { findRecurring, type RecurringCandidate } from '@/lib/import/recurring';
@@ -261,7 +261,7 @@ export default function ImportScreen() {
                 <ListRow
                   onPress={() => setOpen(expanded ? null : key)}
                   title={s.name || t('(no category)')}
-                  subtitle={`${s.kind === 'income' ? t('Income') : t('Expense')} · ${t('{n} entries', { n: s.count })} → ${targetLabel(target)}`}
+                  subtitle={`${s.kind === 'income' ? t('Income') : t('Expense')} · ${tn(s.count, '{n} entry', '{n} entries')} → ${targetLabel(target)}`}
                   right={formatMoney(s.total)}
                   rightColor={s.kind === 'income' ? colors.okText : undefined}
                 />
@@ -284,7 +284,7 @@ export default function ImportScreen() {
         {review.cardBillRows && cardAccount ? (
           <Card>
             <SwitchRow
-              label={t('Treat {n} “CC bill” payments as paying the card', { n: review.cardBillRows })}
+              label={tn(review.cardBillRows, 'Treat {n} “CC bill” payment as paying the card', 'Treat {n} “CC bill” payments as paying the card')}
               hint={t('Logged as a transfer to “{card}” so card spending isn’t counted twice.', { card: cardAccount })}
               value={cardBill}
               onChange={setCardBill}

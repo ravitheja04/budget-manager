@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import Svg, { Circle, G, Path, Polyline, Text as SvgText } from 'react-native-svg';
 
 import { colors } from './ui';
@@ -7,6 +7,8 @@ import { colors } from './ui';
 export type DonutSlice = { key: string; value: number; color: string; label: string };
 
 const LABEL_MIN_SHARE = 0.03;
+// SVG text doesn't inherit the app font in browsers; phones use the system font already.
+const FONT = Platform.OS === 'web' ? 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' : undefined;
 const LINE_HEIGHT = 30;
 
 function point(cx: number, cy: number, r: number, angle: number) {
@@ -85,19 +87,19 @@ export function Donut({ slices, centerTop, centerBottom, onSlicePress }: { slice
             return (
               <G key={l.key}>
                 <Polyline points={`${l.edge.x},${l.edge.y} ${l.elbow.x},${l.elbow.y} ${x - l.side * 4},${l.y}`} fill="none" stroke={colors.muted} strokeWidth={1} />
-                <SvgText x={x} y={l.y - 2} fontSize={12} fontWeight="600" fill={colors.text} textAnchor={l.side === 1 ? 'start' : 'end'}>
+                <SvgText fontFamily={FONT} x={x} y={l.y - 2} fontSize={12} fontWeight="600" fill={colors.text} textAnchor={l.side === 1 ? 'start' : 'end'}>
                   {clip(l.text)}
                 </SvgText>
-                <SvgText x={x} y={l.y + 12} fontSize={11} fill={colors.muted} textAnchor={l.side === 1 ? 'start' : 'end'}>
+                <SvgText fontFamily={FONT} x={x} y={l.y + 12} fontSize={11} fill={colors.muted} textAnchor={l.side === 1 ? 'start' : 'end'}>
                   {l.pct}
                 </SvgText>
               </G>
             );
           })}
-          <SvgText x={cx} y={cy - 2} fontSize={15} fontWeight="700" fill={colors.text} textAnchor="middle">
+          <SvgText fontFamily={FONT} x={cx} y={cy - 2} fontSize={15} fontWeight="700" fill={colors.text} textAnchor="middle">
             {centerTop}
           </SvgText>
-          <SvgText x={cx} y={cy + 15} fontSize={11} fill={colors.muted} textAnchor="middle">
+          <SvgText fontFamily={FONT} x={cx} y={cy + 15} fontSize={11} fill={colors.muted} textAnchor="middle">
             {centerBottom}
           </SvgText>
         </Svg>

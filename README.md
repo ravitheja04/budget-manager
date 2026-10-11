@@ -43,4 +43,4 @@ Code layout:
 
 Amounts are stored as integer paise and dates as `YYYY-MM-DD`.
 
-To build an installable Android APK, run the **Android APK** workflow from the Actions tab.
+To build an installable Android APK, run the **Android APK** workflow from the Actions tab. It makes `budget-logger.apk` for 64-bit phones (almost every phone from the last several years) and `budget-logger-32bit.apk` for older ones; `plugins/with-abi-splits.js` sets up the per-CPU split.

@@ -41,7 +41,8 @@
         {
           "faceIDPermission": "Allow Budget Logger to use Face ID to keep your family’s money records locked."
         }
-      ]
+      ],
+      "./plugins/with-abi-splits"
     ]
   }
 }

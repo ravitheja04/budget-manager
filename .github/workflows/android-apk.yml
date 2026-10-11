@@ -50,17 +50,24 @@ jobs:
           npx expo prebuild --platform android --no-install
           sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g/' android/gradle.properties
 
-      - name: Build release APK
+      - name: Build release APKs
         working-directory: android
         # Real phones only need the ARM builds; skipping x86 halves build time.
+        # One APK per CPU type (abiSplits) with compressed native libraries
+        # (useLegacyPackaging) keeps the download small.
         run: >
           ./gradlew assembleRelease --no-daemon
           -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+          -Pbudget.abiSplits=true
+          -Pexpo.useLegacyPackaging=true
 
-      - name: Name the APK
+      - name: Name the APKs
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release.apk dist/budget-logger.apk
+          out=android/app/build/outputs/apk/release
+          cp $out/app-arm64-v8a-release.apk dist/budget-logger.apk
+          cp $out/app-armeabi-v7a-release.apk dist/budget-logger-32bit.apk
+          ls -l dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -78,5 +85,6 @@ jobs:
           make_latest: false
           files: dist/*.apk
           body: |
-            Built from ${{ github.sha }}. Download the .apk on your Android phone and open it to install.
+            Built from ${{ github.sha }}. Download budget-logger.apk on your Android phone and open it to install.
+            budget-logger-32bit.apk is only for old phones that can't install the first one ("App not installed" or "not compatible").
             Signed with a development key: fine for personal and family use, not for the Play Store.
